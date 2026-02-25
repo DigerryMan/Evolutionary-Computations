@@ -9,3 +9,7 @@ This is a Python project for evolutionary computations.
 
    ```bash
    python main.py
+
+## Run formatter
+uv run ruff format --check
+uv run ruff check
