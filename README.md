@@ -8,8 +8,9 @@ This is a Python project for evolutionary computations.
 2. Run the `main.py` file:
 
    ```bash
-   python main.py
+   uv run .\src\main.py
+   ```
 
 ## Run formatter
-uv run ruff format --check
+uv run ruff format
 uv run ruff check
