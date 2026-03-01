@@ -8,4 +8,6 @@ dependencies = [
     "ruff>=0.15.2",
     "PyQt6>=6.5.0",
     "PyQt6-sip>=13.6.0",
+    "benchmark-functions>=1.1.4",
+    "scipy>=1.17.1",
 ]

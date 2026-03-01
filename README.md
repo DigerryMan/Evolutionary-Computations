@@ -12,5 +12,7 @@ This is a Python project for evolutionary computations.
    ```
 
 ## Run formatter
+```bash
 uv run ruff format
 uv run ruff check
+```
