@@ -26,6 +26,7 @@ def fibonacci() -> list[int]:
 
 # ── Single-variable optimization test functions ──────────────────────────────
 
+
 @FunctionRegistry.register(description="x²  (minimum at x=0)")
 def x_squared(x: float) -> float:
     return x * x
@@ -33,7 +34,7 @@ def x_squared(x: float) -> float:
 
 @FunctionRegistry.register(description="x³ − 2x + 1")
 def cubic(x: float) -> float:
-    return x ** 3 - 2 * x + 1
+    return x**3 - 2 * x + 1
 
 
 @FunctionRegistry.register(description="sin(x)  (global min ≈ −1)")

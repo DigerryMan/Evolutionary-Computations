@@ -10,7 +10,12 @@ from PyQt6.QtWidgets import (
 )
 
 from registry import FunctionRegistry
-from gui.widgets import FunctionListWidget, ParameterFormWidget, OutputDisplayWidget, GAWidget
+from gui.widgets import (
+    FunctionListWidget,
+    ParameterFormWidget,
+    OutputDisplayWidget,
+    GAWidget,
+)
 
 
 class MainWindow(QMainWindow):

@@ -8,6 +8,7 @@ from typing import Callable, Literal
 
 # ─── Chromosome ───────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Chromosome:
     """Binary-encoded chromosome representing one real number in [a, b]."""
@@ -38,11 +39,12 @@ class Chromosome:
 
 def chromosome_length(a: float, b: float, precision: int) -> int:
     """Return minimum bit length to represent [a,b] with given decimal precision."""
-    n = math.ceil(math.log2((b - a) * (10 ** precision) + 1))
+    n = math.ceil(math.log2((b - a) * (10**precision) + 1))
     return max(2, min(n, 64))
 
 
 # ─── Selection ────────────────────────────────────────────────────────────────
+
 
 def select_best(
     population: list[Chromosome], fitnesses: list[float], n: int
@@ -94,6 +96,7 @@ def select_tournament(
 
 # ─── Crossover ────────────────────────────────────────────────────────────────
 
+
 def crossover_single_point(
     p1: Chromosome, p2: Chromosome
 ) -> tuple[Chromosome, Chromosome]:
@@ -111,16 +114,18 @@ def crossover_two_point(
     a, b = sorted(random.sample(range(1, p1.length), 2))
     bits1 = p1.bits[:a] + p2.bits[a:b] + p1.bits[b:]
     bits2 = p2.bits[:a] + p1.bits[a:b] + p2.bits[b:]
-    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(bits=bits2, a=p1.a, b=p1.b)
+    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(
+        bits=bits2, a=p1.a, b=p1.b
+    )
 
 
-def crossover_uniform(
-    p1: Chromosome, p2: Chromosome
-) -> tuple[Chromosome, Chromosome]:
+def crossover_uniform(p1: Chromosome, p2: Chromosome) -> tuple[Chromosome, Chromosome]:
     mask = [random.randint(0, 1) for _ in range(p1.length)]
     bits1 = [p1.bits[i] if mask[i] else p2.bits[i] for i in range(p1.length)]
     bits2 = [p2.bits[i] if mask[i] else p1.bits[i] for i in range(p1.length)]
-    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(bits=bits2, a=p1.a, b=p1.b)
+    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(
+        bits=bits2, a=p1.a, b=p1.b
+    )
 
 
 def crossover_granular(
@@ -141,7 +146,9 @@ def crossover_granular(
             bits2.extend(p2.bits[i:end])
         swap ^= 1
         i = end
-    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(bits=bits2, a=p1.a, b=p1.b)
+    return Chromosome(bits=bits1, a=p1.a, b=p1.b), Chromosome(
+        bits=bits2, a=p1.a, b=p1.b
+    )
 
 
 def _apply_crossover(
@@ -157,6 +164,7 @@ def _apply_crossover(
 
 
 # ─── Mutation ─────────────────────────────────────────────────────────────────
+
 
 def mutate_edge(chrom: Chromosome, prob: float) -> Chromosome:
     """Edge (boundary) mutation: each bit is replaced by 0 or 1 with prob."""
@@ -195,6 +203,7 @@ _MUTATION_MAP = {
 
 # ─── Inversion ────────────────────────────────────────────────────────────────
 
+
 def invert(chrom: Chromosome, prob: float) -> Chromosome:
     """Inversion operator: reverse a randomly chosen segment of the chromosome."""
     bits = chrom.bits[:]
@@ -205,6 +214,7 @@ def invert(chrom: Chromosome, prob: float) -> Chromosome:
 
 
 # ─── Configuration & Result ───────────────────────────────────────────────────
+
 
 @dataclass
 class GAConfig:
@@ -219,7 +229,9 @@ class GAConfig:
     selection_method: Literal["best", "roulette", "tournament"] = "tournament"
     tournament_size: int = 3
     # Crossover
-    crossover_method: Literal["single_point", "two_point", "uniform", "granular"] = "two_point"
+    crossover_method: Literal["single_point", "two_point", "uniform", "granular"] = (
+        "two_point"
+    )
     crossover_prob: float = 0.8
     grain_size: int = 2
     # Mutation
@@ -242,9 +254,8 @@ class GAResult:
 
 # ─── Main loop ────────────────────────────────────────────────────────────────
 
-def run_genetic_algorithm(
-    func: Callable[[float], float], config: GAConfig
-) -> GAResult:
+
+def run_genetic_algorithm(func: Callable[[float], float], config: GAConfig) -> GAResult:
     """Run genetic algorithm to optimise func over [a, b]."""
     if config.b <= config.a:
         raise ValueError("Domain error: b must be greater than a.")
@@ -253,7 +264,9 @@ def run_genetic_algorithm(
     n = config.population_size
     mutation_fn = _MUTATION_MAP[config.mutation_method]
 
-    def do_select(pop: list[Chromosome], fits: list[float], count: int) -> list[Chromosome]:
+    def do_select(
+        pop: list[Chromosome], fits: list[float], count: int
+    ) -> list[Chromosome]:
         if config.selection_method == "tournament":
             return select_tournament(pop, fits, count, config.tournament_size)
         if config.selection_method == "roulette":
@@ -262,7 +275,9 @@ def run_genetic_algorithm(
 
     def evaluate(pop: list[Chromosome]) -> list[float]:
         raw = [func(c.decode()) for c in pop]
-        return raw if config.minimize else [-v for v in raw]  # normalise: lower is always better
+        return (
+            raw if config.minimize else [-v for v in raw]
+        )  # normalise: lower is always better
 
     # Initialise
     population = [Chromosome.random(bit_len, config.a, config.b) for _ in range(n)]
@@ -301,7 +316,9 @@ def run_genetic_algorithm(
             p1 = parents[idx % len(parents)]
             p2 = parents[(idx + 1) % len(parents)]
             if random.random() < config.crossover_prob and bit_len > 1:
-                c1, c2 = _apply_crossover(p1, p2, config.crossover_method, config.grain_size)
+                c1, c2 = _apply_crossover(
+                    p1, p2, config.crossover_method, config.grain_size
+                )
                 offspring.extend([c1, c2])
             else:
                 offspring.extend([p1.copy(), p2.copy()])

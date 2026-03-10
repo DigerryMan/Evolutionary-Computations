@@ -176,7 +176,9 @@ class GAWidget(QWidget):
         self.elite_spin = QSpinBox()
         self.elite_spin.setRange(0, 100)
         self.elite_spin.setValue(1)
-        self.elite_spin.setToolTip("Number of best individuals carried unchanged to next epoch")
+        self.elite_spin.setToolTip(
+            "Number of best individuals carried unchanged to next epoch"
+        )
         adv_layout.addRow("Elite size:", self.elite_spin)
 
         layout.addWidget(adv_group)
@@ -258,7 +260,9 @@ class GAWidget(QWidget):
 
         meta = FunctionRegistry.get(func_name)
         if meta is None:
-            self.result_text.setPlainText(f"Function '{func_name}' not found in registry.")
+            self.result_text.setPlainText(
+                f"Function '{func_name}' not found in registry."
+            )
             return
 
         param_name = meta.parameters[0].name
