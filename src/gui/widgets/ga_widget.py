@@ -1,323 +1,387 @@
-"""Genetic Algorithm configuration and execution widget."""
+from pathlib import Path
+from time import perf_counter
 
-from typing import Literal, cast
-
+import benchmark_functions as bf
+from PyQt6.QtCore import QByteArray, Qt
+from PyQt6.QtSvgWidgets import QSvgWidget
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QFormLayout,
-    QLabel,
-    QComboBox,
-    QSpinBox,
-    QDoubleSpinBox,
     QCheckBox,
-    QPushButton,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
     QGroupBox,
+    QHBoxLayout,
+    QLabel,
     QPlainTextEdit,
+    QPushButton,
     QScrollArea,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt
 
-from registry import FunctionRegistry
 from algorithms.genetic_algorithm import GAConfig, run_genetic_algorithm
+from reporting import save_hypersphere_run
 
 
 class GAWidget(QWidget):
-    """Widget for configuring and running the Genetic Algorithm."""
-
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._build_ui()
-        self._populate_function_combo()
+        self.project_root = Path(__file__).resolve().parents[3]
+        self.results_root = self.project_root / "results"
+        self.empty_svg = QByteArray(
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>'
+        )
+        self.build_ui()
+        self.set_defaults()
+        self.show_last_plot()
 
-    # ── UI construction ───────────────────────────────────────────────────────
-
-    def _build_ui(self):
+    def build_ui(self):
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Scroll area wraps configuration groups
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         outer_layout.addWidget(scroll)
 
         container = QWidget()
-        scroll.setWidget(container)
         layout = QVBoxLayout(container)
         layout.setSpacing(8)
+        scroll.setWidget(container)
 
-        # ── Objective function ─────────────────────────────────────────
-        func_group = QGroupBox("Objective Function")
-        func_layout = QFormLayout(func_group)
+        function_group = QGroupBox("Objective Function")
+        function_layout = QFormLayout(function_group)
 
-        self.func_combo = QComboBox()
-        func_layout.addRow("Function:", self.func_combo)
+        self.function_label = QLabel("Hypersphere")
+        function_layout.addRow("Function:", self.function_label)
+
+        self.description_label = QLabel("f(x) = x1^2 + x2^2 + ... + xn^2")
+        self.description_label.setWordWrap(True)
+        function_layout.addRow("Definition:", self.description_label)
+
+        self.dimensions_spin = QSpinBox()
+        self.dimensions_spin.setRange(1, 100)
+        self.dimensions_spin.setValue(3)
+        function_layout.addRow("Dimensions:", self.dimensions_spin)
 
         domain_row = QWidget()
-        d_lay = QHBoxLayout(domain_row)
-        d_lay.setContentsMargins(0, 0, 0, 0)
+        domain_layout = QHBoxLayout(domain_row)
+        domain_layout.setContentsMargins(0, 0, 0, 0)
+
         self.a_spin = QDoubleSpinBox()
         self.a_spin.setRange(-1e9, 1e9)
-        self.a_spin.setValue(-10.0)
         self.a_spin.setDecimals(4)
+        domain_layout.addWidget(QLabel("a:"))
+        domain_layout.addWidget(self.a_spin)
+
         self.b_spin = QDoubleSpinBox()
         self.b_spin.setRange(-1e9, 1e9)
-        self.b_spin.setValue(10.0)
         self.b_spin.setDecimals(4)
-        d_lay.addWidget(QLabel("a:"))
-        d_lay.addWidget(self.a_spin)
-        d_lay.addWidget(QLabel("b:"))
-        d_lay.addWidget(self.b_spin)
-        func_layout.addRow("Domain [a, b]:", domain_row)
+        domain_layout.addWidget(QLabel("b:"))
+        domain_layout.addWidget(self.b_spin)
 
-        self.minimize_check = QCheckBox("Minimise (uncheck to maximise)")
+        function_layout.addRow("Shared domain [a, b]:", domain_row)
+
+        self.minimize_check = QCheckBox("Minimise")
         self.minimize_check.setChecked(True)
-        func_layout.addRow("", self.minimize_check)
+        function_layout.addRow("", self.minimize_check)
 
-        layout.addWidget(func_group)
+        layout.addWidget(function_group)
 
-        # ── Population ────────────────────────────────────────────────
-        pop_group = QGroupBox("Population & Encoding")
-        pop_layout = QFormLayout(pop_group)
+        population_group = QGroupBox("Population")
+        population_layout = QFormLayout(population_group)
 
         self.pop_size_spin = QSpinBox()
         self.pop_size_spin.setRange(4, 10000)
         self.pop_size_spin.setValue(50)
-        pop_layout.addRow("Population size:", self.pop_size_spin)
+        population_layout.addRow("Population size:", self.pop_size_spin)
 
         self.epochs_spin = QSpinBox()
         self.epochs_spin.setRange(1, 100000)
         self.epochs_spin.setValue(100)
-        pop_layout.addRow("Number of epochs:", self.epochs_spin)
+        population_layout.addRow("Epochs:", self.epochs_spin)
 
         self.precision_spin = QSpinBox()
         self.precision_spin.setRange(1, 10)
         self.precision_spin.setValue(6)
-        self.precision_spin.setToolTip(
-            "Decimal places — determines binary chromosome length"
-        )
-        pop_layout.addRow("Precision (decimal places):", self.precision_spin)
+        population_layout.addRow("Precision:", self.precision_spin)
 
-        layout.addWidget(pop_group)
+        layout.addWidget(population_group)
 
-        # ── Selection ─────────────────────────────────────────────────
-        sel_group = QGroupBox("Selection")
-        sel_layout = QFormLayout(sel_group)
+        selection_group = QGroupBox("Selection")
+        selection_layout = QFormLayout(selection_group)
 
         self.sel_combo = QComboBox()
         self.sel_combo.addItems(["tournament", "best", "roulette"])
-        self.sel_combo.currentTextChanged.connect(self._on_selection_changed)
-        sel_layout.addRow("Method:", self.sel_combo)
+        self.sel_combo.currentTextChanged.connect(self.on_selection_changed)
+        selection_layout.addRow("Method:", self.sel_combo)
 
         self.tournament_label = QLabel("Tournament size:")
         self.tournament_spin = QSpinBox()
         self.tournament_spin.setRange(2, 100)
         self.tournament_spin.setValue(3)
-        sel_layout.addRow(self.tournament_label, self.tournament_spin)
+        selection_layout.addRow(self.tournament_label, self.tournament_spin)
 
-        layout.addWidget(sel_group)
+        layout.addWidget(selection_group)
 
-        # ── Crossover ─────────────────────────────────────────────────
-        cross_group = QGroupBox("Crossover")
-        cross_layout = QFormLayout(cross_group)
+        crossover_group = QGroupBox("Crossover")
+        crossover_layout = QFormLayout(crossover_group)
 
         self.cross_combo = QComboBox()
         self.cross_combo.addItems(["single_point", "two_point", "uniform", "granular"])
-        self.cross_combo.currentTextChanged.connect(self._on_crossover_changed)
-        cross_layout.addRow("Method:", self.cross_combo)
+        self.cross_combo.currentTextChanged.connect(self.on_crossover_changed)
+        crossover_layout.addRow("Method:", self.cross_combo)
 
         self.cross_prob_spin = QDoubleSpinBox()
         self.cross_prob_spin.setRange(0.0, 1.0)
         self.cross_prob_spin.setSingleStep(0.05)
         self.cross_prob_spin.setDecimals(3)
         self.cross_prob_spin.setValue(0.8)
-        cross_layout.addRow("Probability:", self.cross_prob_spin)
+        crossover_layout.addRow("Probability:", self.cross_prob_spin)
 
-        self.grain_label = QLabel("Grain size (bits):")
+        self.grain_label = QLabel("Grain size:")
         self.grain_spin = QSpinBox()
         self.grain_spin.setRange(1, 100)
         self.grain_spin.setValue(2)
-        self.grain_label.setVisible(False)
-        self.grain_spin.setVisible(False)
-        cross_layout.addRow(self.grain_label, self.grain_spin)
+        crossover_layout.addRow(self.grain_label, self.grain_spin)
 
-        layout.addWidget(cross_group)
+        layout.addWidget(crossover_group)
 
-        # ── Mutation ──────────────────────────────────────────────────
-        mut_group = QGroupBox("Mutation")
-        mut_layout = QFormLayout(mut_group)
+        mutation_group = QGroupBox("Mutation")
+        mutation_layout = QFormLayout(mutation_group)
 
         self.mut_combo = QComboBox()
         self.mut_combo.addItems(["single_point", "edge", "two_point"])
-        mut_layout.addRow("Method:", self.mut_combo)
+        mutation_layout.addRow("Method:", self.mut_combo)
 
         self.mut_prob_spin = QDoubleSpinBox()
         self.mut_prob_spin.setRange(0.0, 1.0)
         self.mut_prob_spin.setSingleStep(0.005)
         self.mut_prob_spin.setDecimals(4)
         self.mut_prob_spin.setValue(0.01)
-        mut_layout.addRow("Probability:", self.mut_prob_spin)
+        mutation_layout.addRow("Probability:", self.mut_prob_spin)
 
-        layout.addWidget(mut_group)
+        layout.addWidget(mutation_group)
 
-        # ── Inversion & Elitism ───────────────────────────────────────
-        adv_group = QGroupBox("Inversion & Elitism")
-        adv_layout = QFormLayout(adv_group)
+        other_group = QGroupBox("Other")
+        other_layout = QFormLayout(other_group)
 
         self.inv_prob_spin = QDoubleSpinBox()
         self.inv_prob_spin.setRange(0.0, 1.0)
         self.inv_prob_spin.setSingleStep(0.01)
         self.inv_prob_spin.setDecimals(3)
         self.inv_prob_spin.setValue(0.05)
-        adv_layout.addRow("Inversion probability:", self.inv_prob_spin)
+        other_layout.addRow("Inversion probability:", self.inv_prob_spin)
 
         self.elite_spin = QSpinBox()
         self.elite_spin.setRange(0, 100)
         self.elite_spin.setValue(1)
-        self.elite_spin.setToolTip(
-            "Number of best individuals carried unchanged to next epoch"
-        )
-        adv_layout.addRow("Elite size:", self.elite_spin)
+        other_layout.addRow("Elite size:", self.elite_spin)
 
-        layout.addWidget(adv_group)
+        layout.addWidget(other_group)
 
-        # ── Run button ────────────────────────────────────────────────
         self.run_button = QPushButton("Run Genetic Algorithm")
         self.run_button.setMinimumHeight(40)
-        self.run_button.clicked.connect(self._on_run)
+        self.run_button.clicked.connect(self.run_algorithm)
         layout.addWidget(self.run_button)
 
-        # ── Results ───────────────────────────────────────────────────
-        results_group = QGroupBox("Results")
-        results_layout = QVBoxLayout(results_group)
+        result_group = QGroupBox("Results")
+        result_layout = QVBoxLayout(result_group)
 
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
-        self.result_text.setMinimumHeight(200)
-        results_layout.addWidget(self.result_text)
+        self.result_text.setMinimumHeight(220)
+        result_layout.addWidget(self.result_text)
 
-        layout.addWidget(results_group)
+        layout.addWidget(result_group)
+
+        plot_group = QGroupBox("Plot Preview")
+        plot_layout = QVBoxLayout(plot_group)
+
+        self.plot_status = QLabel()
+        self.plot_status.setWordWrap(True)
+        plot_layout.addWidget(self.plot_status)
+
+        self.plot_widget = QSvgWidget()
+        self.plot_widget.setMinimumHeight(360)
+        self.plot_widget.setStyleSheet(
+            "background-color: white; border: 1px solid #d0d7de;"
+        )
+        plot_layout.addWidget(self.plot_widget)
+
+        layout.addWidget(plot_group)
         layout.addStretch()
 
-    # ── Helpers ───────────────────────────────────────────────────────────────
+    def set_defaults(self):
+        bounds = bf.Hypersphere(n_dimensions=1).suggested_bounds()
+        self.a_spin.setValue(bounds[0][0])
+        self.b_spin.setValue(bounds[1][0])
+        self.result_text.setPlainText("Ready to optimise the Hypersphere function.")
+        self.on_selection_changed(self.sel_combo.currentText())
+        self.on_crossover_changed(self.cross_combo.currentText())
 
-    def _populate_function_combo(self):
-        """Populate the dropdown with single-float-argument functions."""
-        self._func_names: list[str] = []
-        for name, meta in FunctionRegistry.get_all().items():
-            params = [p for p in meta.parameters]
-            if len(params) == 1 and params[0].param_type is float:
-                self.func_combo.addItem(f"{name}  —  {meta.description}", userData=name)
-                self._func_names.append(name)
-
-    def _on_selection_changed(self, method: str):
+    def on_selection_changed(self, method: str):
         visible = method == "tournament"
         self.tournament_label.setVisible(visible)
         self.tournament_spin.setVisible(visible)
 
-    def _on_crossover_changed(self, method: str):
+    def on_crossover_changed(self, method: str):
         visible = method == "granular"
         self.grain_label.setVisible(visible)
         self.grain_spin.setVisible(visible)
 
-    def _build_config(self) -> GAConfig:
+    def make_config(self) -> GAConfig:
         return GAConfig(
             a=self.a_spin.value(),
             b=self.b_spin.value(),
+            dimensions=self.dimensions_spin.value(),
             precision=self.precision_spin.value(),
             population_size=self.pop_size_spin.value(),
             epochs=self.epochs_spin.value(),
-            selection_method=cast(
-                Literal["best", "roulette", "tournament"],
-                self.sel_combo.currentText(),
-            ),
+            selection_method=self.sel_combo.currentText(),
             tournament_size=self.tournament_spin.value(),
-            crossover_method=cast(
-                Literal["single_point", "two_point", "uniform", "granular"],
-                self.cross_combo.currentText(),
-            ),
+            crossover_method=self.cross_combo.currentText(),
             crossover_prob=self.cross_prob_spin.value(),
             grain_size=self.grain_spin.value(),
-            mutation_method=cast(
-                Literal["edge", "single_point", "two_point"],
-                self.mut_combo.currentText(),
-            ),
+            mutation_method=self.mut_combo.currentText(),
             mutation_prob=self.mut_prob_spin.value(),
             inversion_prob=self.inv_prob_spin.value(),
             elite_size=self.elite_spin.value(),
             minimize=self.minimize_check.isChecked(),
         )
 
-    # ── Run ───────────────────────────────────────────────────────────────────
+    def format_vector(self, values: list[float], precision: int) -> str:
+        return "[" + ", ".join(f"{value:.{precision}f}" for value in values) + "]"
 
-    def _on_run(self):
-        func_name: str | None = self.func_combo.currentData()
-        if not func_name:
-            self.result_text.setPlainText("No single-float function available.")
-            return
-
-        meta = FunctionRegistry.get(func_name)
-        if meta is None:
-            self.result_text.setPlainText(
-                f"Function '{func_name}' not found in registry."
-            )
-            return
-
-        param_name = meta.parameters[0].name
-
-        def objective(x: float) -> float:
-            _, result = FunctionRegistry.execute(func_name, **{param_name: x})
-            return float(result)
-
+    def relative_path(self, path: Path) -> str:
         try:
-            config = self._build_config()
-        except Exception as exc:
-            self.result_text.setPlainText(f"Configuration error: {exc}")
+            return str(path.relative_to(self.project_root))
+        except ValueError:
+            return str(path)
+
+    def clear_plot(self, text: str):
+        self.plot_widget.load(self.empty_svg)
+        self.plot_status.setText(text)
+
+    def show_plot(self, path: Path):
+        self.plot_widget.load(str(path))
+        self.plot_status.setText(f"Previewing: {self.relative_path(path)}")
+
+    def show_last_plot(self):
+        if not self.results_root.exists():
+            self.clear_plot("No saved plots yet.")
             return
+
+        plots = sorted(self.results_root.glob("hypersphere_*/fitness_history.svg"))
+        if not plots:
+            self.clear_plot("No saved plots yet.")
+            return
+
+        self.show_plot(plots[-1])
+
+    def reference_point(self, config: GAConfig) -> tuple[list[float], float]:
+        if config.minimize:
+            if config.a <= 0 <= config.b:
+                value = 0.0
+            else:
+                value = config.a if abs(config.a) <= abs(config.b) else config.b
+        else:
+            value = config.a if abs(config.a) >= abs(config.b) else config.b
+
+        point = [value] * config.dimensions
+        fitness = sum(item * item for item in point)
+        return point, fitness
+
+    def run_algorithm(self):
+        try:
+            config = self.make_config()
+        except Exception as error:
+            self.result_text.setPlainText(f"Configuration error: {error}")
+            return
+
+        hypersphere = bf.Hypersphere(n_dimensions=config.dimensions)
+
+        def objective(vector: list[float]) -> float:
+            return float(hypersphere(vector))
 
         self.run_button.setEnabled(False)
-        self.result_text.setPlainText("Running…")
+        self.result_text.setPlainText("Running...")
 
         try:
+            start = perf_counter()
             result = run_genetic_algorithm(objective, config)
-        except Exception as exc:
-            self.result_text.setPlainText(f"Error during GA execution:\n{exc}")
-            return
-        finally:
+            elapsed = perf_counter() - start
+        except Exception as error:
+            self.result_text.setPlainText(f"Error during GA execution:\n{error}")
             self.run_button.setEnabled(True)
+            return
 
-        prec = config.precision
-        best_x = result.best_chromosome.decode()
-        bits_str = "".join(map(str, result.best_chromosome.bits))
-        direction = "min" if config.minimize else "max"
+        self.run_button.setEnabled(True)
+
+        best_vector = result.best_chromosome.decode()
+        best_bits = "".join(str(bit) for bit in result.best_chromosome.bits)
+        precision = config.precision
+        target = "minimisation" if config.minimize else "maximisation"
+        reference_point, reference_value = self.reference_point(config)
+
+        artifacts = None
+        save_error = None
+        try:
+            artifacts = save_hypersphere_run(config, result, elapsed)
+        except Exception as error:
+            save_error = str(error)
 
         lines = [
-            f"Function  : {func_name}",
-            f"Domain    : [{config.a}, {config.b}]",
-            f"Goal      : {direction}imisation",
+            f"Function  : {hypersphere.name()}",
+            f"Formula   : f(x) = sum(x_i^2), i = 1..{config.dimensions}",
+            f"Domain    : [{config.a}, {config.b}] for each dimension",
+            f"Goal      : {target}",
             f"Epochs    : {config.epochs}  |  Population: {config.population_size}",
-            f"Chromosome: {result.best_chromosome.length} bits",
+            (
+                "Genome    : "
+                f"{result.best_chromosome.bits_per_dimension} bits/dimension"
+                f"  |  {result.best_chromosome.length} total bits"
+            ),
+            f"Time      : {elapsed:.6f} s",
             "",
-            f"Best x    = {best_x:.{prec}f}",
-            f"Best f(x) = {result.best_fitness:.{prec}f}",
-            f"Binary    : {bits_str}",
+            f"Best x    = {self.format_vector(best_vector, precision)}",
+            f"Best f(x) = {result.best_fitness:.{precision}f}",
+            (
+                "Reference = "
+                f"{reference_value:.{precision}f} at "
+                f"{self.format_vector(reference_point, precision)}"
+            ),
+            f"Binary    : {best_bits}",
             "",
-            "─── Fitness history (best per epoch) ───",
+            "Saved artifacts",
         ]
 
-        history = result.history
-        # Show at most 100 lines; sample evenly for long runs
-        n = len(history)
-        if n <= 100:
-            indices = range(n)
+        if artifacts is None:
+            self.plot_status.setText(f"Plot preview unavailable: {save_error}")
+            lines.append(f"Save error : {save_error}")
         else:
-            step = n / 100
-            indices = [int(i * step) for i in range(100)]
-            indices.append(n - 1)
+            self.show_plot(artifacts.plot_file)
+            lines.extend(
+                [
+                    f"Run dir   : {self.relative_path(artifacts.run_directory)}",
+                    f"Summary   : {self.relative_path(artifacts.summary_file)}",
+                    f"History   : {self.relative_path(artifacts.history_file)}",
+                    f"Plot      : {self.relative_path(artifacts.plot_file)}",
+                ]
+            )
 
-        for i in indices:
-            lines.append(f"  Epoch {i + 1:6d}: {history[i]:.{prec}f}")
+        lines.append("")
+        lines.append("Fitness history (best per epoch)")
+
+        history = result.history
+        if len(history) <= 100:
+            indexes = range(len(history))
+        else:
+            step = len(history) / 100
+            indexes = [int(i * step) for i in range(100)] + [len(history) - 1]
+
+        for i in indexes:
+            lines.append(f"  Epoch {i + 1:6d}: {history[i]:.{precision}f}")
 
         self.result_text.setPlainText("\n".join(lines))

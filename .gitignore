@@ -92,6 +92,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Generated optimisation outputs
+results/
+
 # mypy
 .mypy_cache/
 .dmypy.json
