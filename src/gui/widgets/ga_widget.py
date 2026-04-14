@@ -183,6 +183,29 @@ class GAWidget(QWidget):
 
         self.run_button = QPushButton("Run Genetic Algorithm")
         self.run_button.setMinimumHeight(40)
+        self.run_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #b7f7a8;
+                color: #103c12;
+                border: 1px solid #7bc96f;
+                border-radius: 8px;
+                font-weight: 600;
+                padding: 8px 12px;
+            }
+            QPushButton:hover {
+                background-color: #a7ef97;
+            }
+            QPushButton:pressed {
+                background-color: #95df84;
+            }
+            QPushButton:disabled {
+                background-color: #d7efd0;
+                color: #6f8a6f;
+                border: 1px solid #c4dec0;
+            }
+            """
+        )
         self.run_button.clicked.connect(self.run_algorithm)
         layout.addWidget(self.run_button)
 

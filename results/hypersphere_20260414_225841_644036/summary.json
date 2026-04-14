@@ -1,0 +1,39 @@
+{
+  "function": "Hypersphere",
+  "created_at": "2026-04-14T22:58:41",
+  "elapsed_seconds": 0.12114509999992151,
+  "config": {
+    "a": -5.0,
+    "b": 5.0,
+    "dimensions": 3,
+    "precision": 6,
+    "population_size": 50,
+    "epochs": 175,
+    "selection_method": "tournament",
+    "tournament_size": 3,
+    "crossover_method": "single_point",
+    "crossover_prob": 0.8,
+    "grain_size": 2,
+    "mutation_method": "single_point",
+    "mutation_prob": 0.01,
+    "inversion_prob": 0.05,
+    "elite_size": 1,
+    "minimize": true
+  },
+  "result": {
+    "best_fitness": 2.5991082520405703e-05,
+    "best_vector": [
+      -0.001266300753730576,
+      -0.004924238021626337,
+      -0.00037342312177557346
+    ],
+    "best_bits": "011111111111011110110011011111111101111110111010011111111111110110001101",
+    "bits_per_dimension": 24,
+    "total_bits": 72
+  },
+  "artifacts": {
+    "summary": "summary.json",
+    "history_csv": "history.csv",
+    "fitness_plot_svg": "fitness_history.svg"
+  }
+}
