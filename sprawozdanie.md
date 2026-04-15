@@ -22,24 +22,17 @@ Uruchamianie aplikacji komendą uv run .\src\main.py
 ## 3. Opis wybranych funkcji testowych i ich optima
 W aktualnej wersji aplikacji używana jest jedna funkcja testowa Hypersphere
 
-Postać funkcji
+Wzór funkcji:
 
-f(x) = x1^2 + x2^2 + ... + xn^2
+![Wzór funkcji Hypersphere](wzor.png)
 
-Wersja indeksowa
 
-f(x) = sum(i=1..n) (x_i^2)
+![Wizualizacja funkcji Hypersphere](hypersphere.png)
 
-Własności istotne dla projektu
 - Funkcja jest separowalna i wypukła
 - Wartość funkcji jest nieujemna
 - Minimum globalne występuje w punkcie x = (0,...,0)
 - W minimum globalnym wartość funkcji wynosi f(x) = 0
-
-Uwagi do implementacji
-- Liczba wymiarów jest konfigurowalna przez GUI
-- Zakres domeny jest ustawiany jako wspólny przedział [a b] dla każdej współrzędnej
-- Aplikacja porównuje wynik algorytmu z punktem referencyjnym wyznaczonym dla aktualnej domeny
 
 ## 4. Wykresy wyników
 Projekt ma gotowy mechanizm zapisu i wizualizacji przebiegu optymalizacji
@@ -71,48 +64,46 @@ Na podstawie plików summary.json wszystkie trzy przebiegi miały ten sam config
 | minimize | true |
 
 #### Wykres 1
-Wykres dla selekcji tournament
+Wykres dla selekcji `tournament`
 
 Kluczowa wartość configu względem pozostałych
 - selection_method = tournament
 
 Co widać na wykresie
-- Długa faza stabilizacji w środku przebiegu
-- Najmocniejsza poprawa jakości blisko końca epok
+- Najmocniejsza poprawa jakości w piersze kilka epok
+- Potem dłuższa faza stabilizacji
+
 
 ![Wykres fitness history dla tournament](results/hypersphere_20260414_225841_644036/fitness_history.svg)
 
 #### Wykres 2
-Wykres dla selekcji best
+Wykres dla selekcji `best`
 
 Kluczowa wartość configu względem pozostałych
 - selection_method = best
 
 Co widać na wykresie
-- Najszybsze dojście do bardzo niskich wartości fitness
-- Stabilny przebieg końcówki
+- Szybkie dojście schodkowe do wyniku
 
 ![Wykres fitness history dla best](results/hypersphere_20260414_225852_305808/fitness_history.svg)
 
 #### Wykres 3
-Wykres dla selekcji roulette
+Wykres dla selekcji `roulette`
 
 Kluczowa wartość configu względem pozostałych
 - selection_method = roulette
 
 Co widać na wykresie
-- Najniższa wartość końcowa fitness ze wszystkich trzech runów
-- Wyraźna poprawa w końcowej części epok
+- Rownież schodkowy przebig, ale dłuższy
+- Dojście bliskie rozwiązania dopiero koło 80 epoki
 
 ![Wykres fitness history dla roulette](results/hypersphere_20260414_225900_079200/fitness_history.svg)
 
 ## 5. Porównanie wyników dla różnych konfiguracji algorytmu
 Implementacja udostępnia parametry, które bezpośrednio wpływają na jakość i szybkość zbieżności
-- Metoda selekcji tournament best roulette
-- Metoda krzyżowania single_point two_point uniform granular
-- Prawdopodobieństwo krzyżowania
-- Metoda mutacji single_point edge two_point
-- Prawdopodobieństwo mutacji
+- Metoda selekcji: tournament, best, roulette
+- Metoda krzyżowania (oraz jej prawdopodobieństwo): single_point, two_point, uniform, granular 
+- Metoda mutacji (oraz jej prawdopodobieństwo): single_point, edge, two_point
 - Prawdopodobieństwo inwersji
 - Rozmiar populacji
 - Liczba epok
@@ -121,7 +112,7 @@ Implementacja udostępnia parametry, które bezpośrednio wpływają na jakość
 Kierunek porównania konfiguracji
 - Większa populacja zwykle poprawia eksplorację kosztem czasu obliczeń
 - Większa liczba epok zwykle poprawia końcowy wynik kosztem czasu
-- Selekcja tournament może dawać stabilne postępy przy poprawnym doborze rozmiaru turnieju, ale w naszym eksperymencie końcowy wynik był słabszy niż dla best i roulette
+- Selekcja tournament może dawać stabilne postępy przy poprawnym doborze rozmiaru turnieju. W naszym eksperymencie zbiegała ona najszybciej do poprawnego rozwiązania, natomiast miała potem problem ze znalezniem dokładniejszego rozwiązania.
 - Zbyt wysoka mutacja pogarsza stabilizację rozwiązania
 - Elityzm przyspiesza utrzymanie dobrych osobników ale może ograniczać różnorodność
 
@@ -134,22 +125,22 @@ Zestawienie końcowych wyników
 | Roulette | roulette | 4.630370506111484e-06 | 0.1125114 |
 
 Wniosek z samej wartości końcowej
-- Najlepszy wynik końcowy uzyskał roulette
-- Drugi wynik uzyskał best
-- Najsłabszy wynik końcowy uzyskał tournament
+- Najlepszy wynik końcowy uzyskał `roulette`
+- Drugi wynik uzyskał najszybszy `best`
+- Najsłabszy wynik końcowy uzyskał `tournament`, który był również najwolniejszy
 
 Wnioski z porównania
 - Sama zmiana metody selekcji istotnie zmieniła dynamikę zbieżności
-- Selekcja best i roulette dały wyraźnie lepsze wartości końcowe niż tournament
-- Tournament miał najbardziej nieregularny przebieg i najpóźniejszą poprawę jakości
-- Różnice czasów wykonania były małe względem różnic jakości rozwiązania
+- Selekcja `best` i roulette dały wyraźnie lepsze wartości końcowe niż tournament
+- Tournament miał najszybszy progress, jednak potem miał problem nadgonić
+- `roullete` z najlepszym wynikiem zbiegało najwolniej, mimo to osiągnęło najlepszy wynik końcowy (ale nie dużo lepszy niż `best`)
 
 ## 6. Podsumowanie i analiza błędów
 Podsumowanie
-- Projekt jest spójną aplikacją GUI do optymalizacji funkcji Hypersphere algorytmem genetycznym
-- Architektura jest podzielona na moduły algorytmu GUI i raportowania wyników
-- Zapis artefaktów eksperymentu jest dobrze przygotowany pod dalszą analizę
+- Aplikacją GUI do optymalizacji funkcji Hypersphere algorytmem genetycznym
+- Formularz do konfiguracji funkcji, zapis do plików, oraz generowanie wykresu.
 
 Analiza błędów i ryzyk
-- Jakość wyniku zależy od doboru hiperparametrów i losowości procesu ewolucyjnego
+- Jakość wyniku zależy od doboru parametrów i losowości procesu ewolucyjnego
+- Praca z liczbami zmiennoprzecinkowymi (overflow itp.)
 - Nie implementowaliśmy unit testów
