@@ -31,6 +31,7 @@ def save_hypersphere_run(
     history_file = run_directory / "history.csv"
     plot_file = run_directory / "fitness_history.svg"
 
+    is_binary = config.encoding == "binary"
     summary = {
         "function": "Hypersphere",
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -39,9 +40,16 @@ def save_hypersphere_run(
         "result": {
             "best_fitness": result.best_fitness,
             "best_vector": result.best_chromosome.decode(),
-            "best_bits": "".join(str(bit) for bit in result.best_chromosome.bits),
-            "bits_per_dimension": result.best_chromosome.bits_per_dimension,
-            "total_bits": result.best_chromosome.length,
+            "best_bits": (
+                "".join(str(bit) for bit in result.best_chromosome.bits)
+                if is_binary
+                else None
+            ),
+            "bits_per_dimension": (
+                result.best_chromosome.bits_per_dimension if is_binary else None
+            ),
+            "total_bits": result.best_chromosome.length if is_binary else None,
+            "encoding": config.encoding,
         },
         "artifacts": {
             "summary": summary_file.name,

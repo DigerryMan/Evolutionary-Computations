@@ -1,5 +1,6 @@
 from pathlib import Path
 from time import perf_counter
+from typing import Literal, cast
 
 import benchmark_functions as bf
 from PyQt6.QtCore import QByteArray, Qt
@@ -109,6 +110,16 @@ class GAWidget(QWidget):
 
         layout.addWidget(population_group)
 
+        representation_group = QGroupBox("Representation")
+        representation_layout = QFormLayout(representation_group)
+
+        self.encoding_combo = QComboBox()
+        self.encoding_combo.addItems(["binary", "real"])
+        self.encoding_combo.currentTextChanged.connect(self.on_encoding_changed)
+        representation_layout.addRow("Encoding:", self.encoding_combo)
+
+        layout.addWidget(representation_group)
+
         selection_group = QGroupBox("Selection")
         selection_layout = QFormLayout(selection_group)
 
@@ -146,6 +157,22 @@ class GAWidget(QWidget):
         self.grain_spin.setValue(2)
         crossover_layout.addRow(self.grain_label, self.grain_spin)
 
+        self.blend_alpha_label = QLabel("Blend alpha:")
+        self.blend_alpha_spin = QDoubleSpinBox()
+        self.blend_alpha_spin.setRange(0.0, 2.0)
+        self.blend_alpha_spin.setSingleStep(0.05)
+        self.blend_alpha_spin.setDecimals(3)
+        self.blend_alpha_spin.setValue(0.5)
+        crossover_layout.addRow(self.blend_alpha_label, self.blend_alpha_spin)
+
+        self.blend_beta_label = QLabel("Blend beta:")
+        self.blend_beta_spin = QDoubleSpinBox()
+        self.blend_beta_spin.setRange(0.0, 2.0)
+        self.blend_beta_spin.setSingleStep(0.05)
+        self.blend_beta_spin.setDecimals(3)
+        self.blend_beta_spin.setValue(0.5)
+        crossover_layout.addRow(self.blend_beta_label, self.blend_beta_spin)
+
         layout.addWidget(crossover_group)
 
         mutation_group = QGroupBox("Mutation")
@@ -153,6 +180,7 @@ class GAWidget(QWidget):
 
         self.mut_combo = QComboBox()
         self.mut_combo.addItems(["single_point", "edge", "two_point"])
+        self.mut_combo.currentTextChanged.connect(self.on_mutation_changed)
         mutation_layout.addRow("Method:", self.mut_combo)
 
         self.mut_prob_spin = QDoubleSpinBox()
@@ -161,6 +189,14 @@ class GAWidget(QWidget):
         self.mut_prob_spin.setDecimals(4)
         self.mut_prob_spin.setValue(0.01)
         mutation_layout.addRow("Probability:", self.mut_prob_spin)
+
+        self.gauss_sigma_label = QLabel("Gaussian sigma (range %):")
+        self.gauss_sigma_spin = QDoubleSpinBox()
+        self.gauss_sigma_spin.setRange(0.0, 100.0)
+        self.gauss_sigma_spin.setSingleStep(1.0)
+        self.gauss_sigma_spin.setDecimals(1)
+        self.gauss_sigma_spin.setValue(10.0)
+        mutation_layout.addRow(self.gauss_sigma_label, self.gauss_sigma_spin)
 
         layout.addWidget(mutation_group)
 
@@ -242,19 +278,87 @@ class GAWidget(QWidget):
         self.b_spin.setValue(bounds[1][0])
         self.result_text.setPlainText("Ready to optimise the Hypersphere function.")
         self.on_selection_changed(self.sel_combo.currentText())
-        self.on_crossover_changed(self.cross_combo.currentText())
+        self.on_encoding_changed(self.encoding_combo.currentText())
 
     def on_selection_changed(self, method: str):
         visible = method == "tournament"
         self.tournament_label.setVisible(visible)
         self.tournament_spin.setVisible(visible)
 
+    def on_encoding_changed(self, encoding: str):
+        if encoding == "binary":
+            crossover_items = ["single_point", "two_point", "uniform", "granular"]
+            mutation_items = ["single_point", "edge", "two_point"]
+        else:
+            crossover_items = [
+                "arithmetic",
+                "linear",
+                "blend_alpha",
+                "blend_alpha_beta",
+                "averaging",
+            ]
+            mutation_items = ["uniform", "gaussian"]
+
+        self.cross_combo.blockSignals(True)
+        self.cross_combo.clear()
+        self.cross_combo.addItems(crossover_items)
+        self.cross_combo.setCurrentIndex(0)
+        self.cross_combo.blockSignals(False)
+
+        self.mut_combo.blockSignals(True)
+        self.mut_combo.clear()
+        self.mut_combo.addItems(mutation_items)
+        self.mut_combo.setCurrentIndex(0)
+        self.mut_combo.blockSignals(False)
+
+        self.inv_prob_spin.setEnabled(encoding == "binary")
+        if encoding != "binary":
+            self.inv_prob_spin.setValue(0.0)
+
+        self.on_crossover_changed(self.cross_combo.currentText())
+        self.on_mutation_changed(self.mut_combo.currentText())
+
     def on_crossover_changed(self, method: str):
-        visible = method == "granular"
-        self.grain_label.setVisible(visible)
-        self.grain_spin.setVisible(visible)
+        is_granular = method == "granular"
+        self.grain_label.setVisible(is_granular)
+        self.grain_spin.setVisible(is_granular)
+
+        uses_alpha = method in {"blend_alpha", "blend_alpha_beta"}
+        uses_beta = method == "blend_alpha_beta"
+        self.blend_alpha_label.setVisible(uses_alpha)
+        self.blend_alpha_spin.setVisible(uses_alpha)
+        self.blend_beta_label.setVisible(uses_beta)
+        self.blend_beta_spin.setVisible(uses_beta)
+
+    def on_mutation_changed(self, method: str):
+        visible = method == "gaussian"
+        self.gauss_sigma_label.setVisible(visible)
+        self.gauss_sigma_spin.setVisible(visible)
 
     def make_config(self) -> GAConfig:
+        encoding = cast(Literal["binary", "real"], self.encoding_combo.currentText())
+        selection = cast(
+            Literal["best", "roulette", "tournament"],
+            self.sel_combo.currentText(),
+        )
+        crossover = cast(
+            Literal[
+                "single_point",
+                "two_point",
+                "uniform",
+                "granular",
+                "arithmetic",
+                "linear",
+                "blend_alpha",
+                "blend_alpha_beta",
+                "averaging",
+            ],
+            self.cross_combo.currentText(),
+        )
+        mutation = cast(
+            Literal["edge", "single_point", "two_point", "uniform", "gaussian"],
+            self.mut_combo.currentText(),
+        )
         return GAConfig(
             a=self.a_spin.value(),
             b=self.b_spin.value(),
@@ -262,16 +366,20 @@ class GAWidget(QWidget):
             precision=self.precision_spin.value(),
             population_size=self.pop_size_spin.value(),
             epochs=self.epochs_spin.value(),
-            selection_method=self.sel_combo.currentText(),
+            encoding=encoding,
+            selection_method=selection,
             tournament_size=self.tournament_spin.value(),
-            crossover_method=self.cross_combo.currentText(),
+            crossover_method=crossover,
             crossover_prob=self.cross_prob_spin.value(),
             grain_size=self.grain_spin.value(),
-            mutation_method=self.mut_combo.currentText(),
+            mutation_method=mutation,
             mutation_prob=self.mut_prob_spin.value(),
             inversion_prob=self.inv_prob_spin.value(),
             elite_size=self.elite_spin.value(),
             minimize=self.minimize_check.isChecked(),
+            blend_alpha=self.blend_alpha_spin.value(),
+            blend_beta=self.blend_beta_spin.value(),
+            gaussian_sigma=self.gauss_sigma_spin.value() / 100.0,
         )
 
     def format_vector(self, values: list[float], precision: int) -> str:
@@ -348,6 +456,15 @@ class GAWidget(QWidget):
         target = "minimisation" if config.minimize else "maximisation"
         reference_point, reference_value = self.reference_point(config)
 
+        if config.encoding == "binary":
+            genome_line = (
+                "Genome    : "
+                f"{result.best_chromosome.bits_per_dimension} bits/dimension"
+                f"  |  {result.best_chromosome.length} total bits"
+            )
+        else:
+            genome_line = f"Genome    : real-valued ({config.dimensions} genes)"
+
         artifacts = None
         save_error = None
         try:
@@ -361,11 +478,7 @@ class GAWidget(QWidget):
             f"Domain    : [{config.a}, {config.b}] for each dimension",
             f"Goal      : {target}",
             f"Epochs    : {config.epochs}  |  Population: {config.population_size}",
-            (
-                "Genome    : "
-                f"{result.best_chromosome.bits_per_dimension} bits/dimension"
-                f"  |  {result.best_chromosome.length} total bits"
-            ),
+            genome_line,
             f"Time      : {elapsed:.6f} s",
             "",
             f"Best x    = {self.format_vector(best_vector, precision)}",
@@ -375,7 +488,11 @@ class GAWidget(QWidget):
                 f"{reference_value:.{precision}f} at "
                 f"{self.format_vector(reference_point, precision)}"
             ),
-            f"Binary    : {best_bits}",
+            *(
+                [f"Binary    : {best_bits}"]
+                if config.encoding == "binary"
+                else ["Binary    : n/a (real encoding)"]
+            ),
             "",
             "Saved artifacts",
         ]
