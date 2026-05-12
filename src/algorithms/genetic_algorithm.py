@@ -1,7 +1,27 @@
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Callable, Literal
+from typing import Callable, Literal, Protocol, Self, Sequence, cast
+
+
+class ChromosomeLike(Protocol):
+    def clone(self) -> Self:
+        ...
+
+    def decode(self) -> list[float]:
+        ...
+
+    @property
+    def bits(self) -> list[int]:
+        ...
+
+    @property
+    def bits_per_dimension(self) -> int:
+        ...
+
+    @property
+    def length(self) -> int:
+        ...
 
 
 @dataclass
@@ -65,27 +85,70 @@ class Chromosome:
         )
 
 
+@dataclass
+class RealChromosome:
+    genes: list[float]
+    a: float
+    b: float
+    dimensions: int = 1
+    bits_per_dimension: int = 0
+    bits: list[int] = field(default_factory=list)
+
+    @property
+    def length(self) -> int:
+        return len(self.genes)
+
+    def clone(self) -> "RealChromosome":
+        return RealChromosome(
+            self.genes[:],
+            self.a,
+            self.b,
+            self.dimensions,
+            self.bits_per_dimension,
+        )
+
+    def with_genes(self, genes: list[float]) -> "RealChromosome":
+        return RealChromosome(
+            genes,
+            self.a,
+            self.b,
+            self.dimensions,
+            self.bits_per_dimension,
+        )
+
+    def decode(self) -> list[float]:
+        return self.genes[:]
+
+    @classmethod
+    def random(cls, a: float, b: float, dimensions: int = 1) -> "RealChromosome":
+        return cls([random.uniform(a, b) for _ in range(dimensions)], a, b, dimensions)
+
+
 def chromosome_length(a: float, b: float, precision: int) -> int:
     value = math.ceil(math.log2((b - a) * (10**precision) + 1))
     return max(2, min(value, 64))
 
 
 def select_best(
-    population: list[Chromosome], fitnesses: list[float], n: int
-) -> list[Chromosome]:
+    population: Sequence[ChromosomeLike],
+    fitnesses: list[float],
+    n: int,
+) -> list[ChromosomeLike]:
     order = sorted(range(len(population)), key=fitnesses.__getitem__)
     return [population[i].clone() for i in order[:n]]
 
 
 def select_roulette(
-    population: list[Chromosome], fitnesses: list[float], n: int
-) -> list[Chromosome]:
+    population: Sequence[ChromosomeLike],
+    fitnesses: list[float],
+    n: int,
+) -> list[ChromosomeLike]:
     max_fitness = max(fitnesses)
     weights = [max_fitness - fitness + 1e-10 for fitness in fitnesses]
     total = sum(weights)
     probabilities = [weight / total for weight in weights]
 
-    selected: list[Chromosome] = []
+    selected: list[ChromosomeLike] = []
     for _ in range(n):
         draw = random.random()
         cumulative = 0.0
@@ -103,13 +166,13 @@ def select_roulette(
 
 
 def select_tournament(
-    population: list[Chromosome],
+    population: Sequence[ChromosomeLike],
     fitnesses: list[float],
     n: int,
     tournament_size: int = 3,
-) -> list[Chromosome]:
+) -> list[ChromosomeLike]:
     size = min(tournament_size, len(population))
-    selected: list[Chromosome] = []
+    selected: list[ChromosomeLike] = []
 
     for _ in range(n):
         players = random.sample(range(len(population)), size)
@@ -177,6 +240,95 @@ def crossover_granular(
     return first.with_bits(bits1), second.with_bits(bits2)
 
 
+def clamp_value(value: float, a: float, b: float) -> float:
+    return min(b, max(a, value))
+
+
+def sample_in_bounds(
+    low: float, high: float, a: float, b: float, attempts: int = 20
+) -> float:
+    for _ in range(attempts):
+        value = random.uniform(low, high)
+        if a <= value <= b:
+            return value
+    return clamp_value(random.uniform(low, high), a, b)
+
+
+def crossover_arithmetic(
+    first: RealChromosome, second: RealChromosome
+) -> tuple[RealChromosome, RealChromosome]:
+    alpha = random.random()
+    genes1: list[float] = []
+    genes2: list[float] = []
+    for x, y in zip(first.genes, second.genes):
+        c1 = alpha * x + (1.0 - alpha) * y
+        c2 = (1.0 - alpha) * x + alpha * y
+        genes1.append(clamp_value(c1, first.a, first.b))
+        genes2.append(clamp_value(c2, first.a, first.b))
+    return first.with_genes(genes1), second.with_genes(genes2)
+
+
+def crossover_linear_candidates(
+    first: RealChromosome, second: RealChromosome
+) -> tuple[RealChromosome, RealChromosome, RealChromosome]:
+    genes_z: list[float] = []
+    genes_v: list[float] = []
+    genes_w: list[float] = []
+    for x, y in zip(first.genes, second.genes):
+        z = 0.5 * (x + y)
+        v = 1.5 * x - 0.5 * y
+        w = -0.5 * x + 1.5 * y
+        genes_z.append(clamp_value(z, first.a, first.b))
+        genes_v.append(clamp_value(v, first.a, first.b))
+        genes_w.append(clamp_value(w, first.a, first.b))
+    return (
+        first.with_genes(genes_z),
+        first.with_genes(genes_v),
+        first.with_genes(genes_w),
+    )
+
+
+def crossover_blend_alpha(
+    first: RealChromosome, second: RealChromosome, alpha: float
+) -> tuple[RealChromosome, RealChromosome]:
+    genes1: list[float] = []
+    genes2: list[float] = []
+    for x, y in zip(first.genes, second.genes):
+        low = min(x, y)
+        high = max(x, y)
+        distance = high - low
+        span_low = low - alpha * distance
+        span_high = high + alpha * distance
+        genes1.append(sample_in_bounds(span_low, span_high, first.a, first.b))
+        genes2.append(sample_in_bounds(span_low, span_high, first.a, first.b))
+    return first.with_genes(genes1), second.with_genes(genes2)
+
+
+def crossover_blend_alpha_beta(
+    first: RealChromosome, second: RealChromosome, alpha: float, beta: float
+) -> tuple[RealChromosome, RealChromosome]:
+    genes1: list[float] = []
+    genes2: list[float] = []
+    for x, y in zip(first.genes, second.genes):
+        low = min(x, y)
+        high = max(x, y)
+        distance = high - low
+        span_low = low - alpha * distance
+        span_high = high + beta * distance
+        genes1.append(sample_in_bounds(span_low, span_high, first.a, first.b))
+        genes2.append(sample_in_bounds(span_low, span_high, first.a, first.b))
+    return first.with_genes(genes1), second.with_genes(genes2)
+
+
+def crossover_averaging(
+    first: RealChromosome, second: RealChromosome
+) -> tuple[RealChromosome, RealChromosome]:
+    genes = [0.5 * (x + y) for x, y in zip(first.genes, second.genes)]
+    genes = [clamp_value(value, first.a, first.b) for value in genes]
+    child = first.with_genes(genes)
+    return child.clone(), child.clone()
+
+
 def apply_crossover(
     first: Chromosome, second: Chromosome, method: str, grain_size: int
 ) -> tuple[Chromosome, Chromosome]:
@@ -187,6 +339,24 @@ def apply_crossover(
     if method == "uniform":
         return crossover_uniform(first, second)
     return crossover_granular(first, second, grain_size)
+
+
+def apply_real_crossover(
+    first: RealChromosome,
+    second: RealChromosome,
+    method: str,
+    blend_alpha: float,
+    blend_beta: float,
+) -> tuple[RealChromosome, RealChromosome]:
+    if method == "arithmetic":
+        return crossover_arithmetic(first, second)
+    if method == "linear":
+        raise ValueError("linear crossover is handled with fitness selection")
+    if method == "blend_alpha":
+        return crossover_blend_alpha(first, second, blend_alpha)
+    if method == "blend_alpha_beta":
+        return crossover_blend_alpha_beta(first, second, blend_alpha, blend_beta)
+    return crossover_averaging(first, second)
 
 
 def mutate_edge(chromosome: Chromosome, probability: float) -> Chromosome:
@@ -228,6 +398,27 @@ MUTATION_METHODS = {
 }
 
 
+def mutate_uniform_real(chromosome: RealChromosome, probability: float) -> RealChromosome:
+    genes = chromosome.genes[:]
+    if genes and random.random() < probability:
+        index = random.randint(0, len(genes) - 1)
+        genes[index] = random.uniform(chromosome.a, chromosome.b)
+    return chromosome.with_genes(genes)
+
+
+def mutate_gaussian_real(
+    chromosome: RealChromosome, probability: float, sigma_ratio: float
+) -> RealChromosome:
+    genes = chromosome.genes[:]
+    sigma = abs(chromosome.b - chromosome.a) * sigma_ratio
+    if genes and random.random() < probability:
+        index = random.randint(0, len(genes) - 1)
+        genes[index] = clamp_value(
+            genes[index] + random.gauss(0.0, sigma), chromosome.a, chromosome.b
+        )
+    return chromosome.with_genes(genes)
+
+
 @dataclass
 class GAConfig:
     a: float = -10.0
@@ -236,23 +427,41 @@ class GAConfig:
     precision: int = 6
     population_size: int = 50
     epochs: int = 100
+    encoding: Literal["binary", "real"] = "binary"
     selection_method: Literal["best", "roulette", "tournament"] = "tournament"
     tournament_size: int = 3
-    crossover_method: Literal["single_point", "two_point", "uniform", "granular"] = (
-        "two_point"
-    )
+    crossover_method: Literal[
+        "single_point",
+        "two_point",
+        "uniform",
+        "granular",
+        "arithmetic",
+        "linear",
+        "blend_alpha",
+        "blend_alpha_beta",
+        "averaging",
+    ] = "two_point"
     crossover_prob: float = 0.8
     grain_size: int = 2
-    mutation_method: Literal["edge", "single_point", "two_point"] = "single_point"
+    mutation_method: Literal[
+        "edge",
+        "single_point",
+        "two_point",
+        "uniform",
+        "gaussian",
+    ] = "single_point"
     mutation_prob: float = 0.01
     inversion_prob: float = 0.05
     elite_size: int = 1
     minimize: bool = True
+    blend_alpha: float = 0.5
+    blend_beta: float = 0.5
+    gaussian_sigma: float = 0.1
 
 
 @dataclass
 class GAResult:
-    best_chromosome: Chromosome
+    best_chromosome: ChromosomeLike
     best_fitness: float
     history: list[float] = field(default_factory=list)
 
@@ -264,29 +473,60 @@ def run_genetic_algorithm(
         raise ValueError("b must be greater than a")
     if config.dimensions < 1:
         raise ValueError("dimensions must be at least 1")
+    if config.encoding == "binary":
+        if config.crossover_method not in {
+            "single_point",
+            "two_point",
+            "uniform",
+            "granular",
+        }:
+            raise ValueError("binary encoding requires a binary crossover method")
+        if config.mutation_method not in {"edge", "single_point", "two_point"}:
+            raise ValueError("binary encoding requires a binary mutation method")
+    else:
+        if config.crossover_method not in {
+            "arithmetic",
+            "linear",
+            "blend_alpha",
+            "blend_alpha_beta",
+            "averaging",
+        }:
+            raise ValueError("real encoding requires a real crossover method")
+        if config.mutation_method not in {"uniform", "gaussian"}:
+            raise ValueError("real encoding requires a real mutation method")
 
     bits_per_dimension = chromosome_length(config.a, config.b, config.precision)
-    mutate = MUTATION_METHODS[config.mutation_method]
 
-    def evaluate(population: list[Chromosome]) -> list[float]:
+    def evaluate(population: Sequence[ChromosomeLike]) -> list[float]:
         values = [func(chromosome.decode()) for chromosome in population]
         if config.minimize:
             return values
         return [-value for value in values]
 
     def select(
-        population: list[Chromosome], fitnesses: list[float], count: int
-    ) -> list[Chromosome]:
+        population: Sequence[ChromosomeLike],
+        fitnesses: list[float],
+        count: int,
+    ) -> list[ChromosomeLike]:
         if config.selection_method == "best":
             return select_best(population, fitnesses, count)
         if config.selection_method == "roulette":
             return select_roulette(population, fitnesses, count)
         return select_tournament(population, fitnesses, count, config.tournament_size)
 
-    population = [
-        Chromosome.random(bits_per_dimension, config.a, config.b, config.dimensions)
-        for _ in range(config.population_size)
-    ]
+    if config.encoding == "binary":
+        mutate_binary = MUTATION_METHODS[config.mutation_method]
+        population: list[ChromosomeLike] = [
+            Chromosome.random(
+                bits_per_dimension, config.a, config.b, config.dimensions
+            )
+            for _ in range(config.population_size)
+        ]
+    else:
+        population = [
+            RealChromosome.random(config.a, config.b, config.dimensions)
+            for _ in range(config.population_size)
+        ]
 
     best = population[0].clone()
     best_fitness = float("inf")
@@ -308,7 +548,7 @@ def run_genetic_algorithm(
 
         needed = len(population) - elite_count
         parents = select(population, fitnesses, max(needed, 2))
-        offspring: list[Chromosome] = []
+        offspring: list[ChromosomeLike] = []
         index = 0
 
         while len(offspring) < needed:
@@ -316,9 +556,34 @@ def run_genetic_algorithm(
             second = parents[(index + 1) % len(parents)]
 
             if random.random() < config.crossover_prob and first.length > 1:
-                child1, child2 = apply_crossover(
-                    first, second, config.crossover_method, config.grain_size
-                )
+                if config.encoding == "binary":
+                    child1, child2 = apply_crossover(
+                        cast(Chromosome, first),
+                        cast(Chromosome, second),
+                        config.crossover_method,
+                        config.grain_size,
+                    )
+                else:
+                    if config.crossover_method == "linear":
+                        candidates = crossover_linear_candidates(
+                            cast(RealChromosome, first),
+                            cast(RealChromosome, second),
+                        )
+                        candidate_fitness = evaluate(candidates)
+                        order = sorted(
+                            range(len(candidates)),
+                            key=candidate_fitness.__getitem__,
+                        )
+                        child1 = candidates[order[0]].clone()
+                        child2 = candidates[order[1]].clone()
+                    else:
+                        child1, child2 = apply_real_crossover(
+                            cast(RealChromosome, first),
+                            cast(RealChromosome, second),
+                            config.crossover_method,
+                            config.blend_alpha,
+                            config.blend_beta,
+                        )
                 offspring.extend([child1, child2])
             else:
                 offspring.extend([first.clone(), second.clone()])
@@ -326,13 +591,42 @@ def run_genetic_algorithm(
             index += 2
 
         offspring = offspring[:needed]
-        offspring = [
-            mutate(chromosome, config.mutation_prob) for chromosome in offspring
-        ]
+        if config.encoding == "binary":
+            offspring = cast(
+                list[ChromosomeLike],
+                [
+                    mutate_binary(cast(Chromosome, chromosome), config.mutation_prob)
+                    for chromosome in offspring
+                ],
+            )
+        else:
+            if config.mutation_method == "uniform":
+                offspring = cast(
+                    list[ChromosomeLike],
+                    [
+                        mutate_uniform_real(
+                            cast(RealChromosome, chromosome), config.mutation_prob
+                        )
+                        for chromosome in offspring
+                    ],
+                )
+            else:
+                offspring = cast(
+                    list[ChromosomeLike],
+                    [
+                        mutate_gaussian_real(
+                            cast(RealChromosome, chromosome),
+                            config.mutation_prob,
+                            config.gaussian_sigma,
+                        )
+                        for chromosome in offspring
+                    ],
+                )
 
-        if config.inversion_prob > 0:
+        if config.encoding == "binary" and config.inversion_prob > 0:
             offspring = [
-                invert(chromosome, config.inversion_prob) for chromosome in offspring
+                invert(cast(Chromosome, chromosome), config.inversion_prob)
+                for chromosome in offspring
             ]
 
         population = elite + offspring

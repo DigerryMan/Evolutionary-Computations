@@ -43,8 +43,7 @@ Projekt ma gotowy mechanizm zapisu i wizualizacji przebiegu optymalizacji
 
 ### Osadzone wykresy
 #### Wspólny config dla wszystkich wykresów
-Na podstawie plików summary.json wszystkie trzy przebiegi miały ten sam config bazowy
-- Jedyna celowa zmiana między przebiegami to selection_method
+Na podstawie plików summary.json wszystkie sześć przebiegów ma ten sam config bazowy, zmiany co do bazowego configu widnieją zaraz pod nagłówkiem wykresu.
 
 | Parametr | Wartość |
 | --- | --- |
@@ -63,6 +62,8 @@ Na podstawie plików summary.json wszystkie trzy przebiegi miały ten sam config
 | elite_size | 1 |
 | minimize | true |
 
+<div style="page-break-before: always;"></div>
+
 #### Wykres 1
 Wykres dla selekcji `tournament`
 
@@ -70,11 +71,13 @@ Kluczowa wartość configu względem pozostałych
 - selection_method = tournament
 
 Co widać na wykresie
-- Najmocniejsza poprawa jakości w piersze kilka epok
+- Najmocniejsza poprawa jakości w pierwszych kilku epokach
 - Potem dłuższa faza stabilizacji
 
 
 ![Wykres fitness history dla tournament](results/hypersphere_20260414_225841_644036/fitness_history.svg)
+
+<div style="page-break-before: always;"></div>
 
 #### Wykres 2
 Wykres dla selekcji `best`
@@ -87,6 +90,8 @@ Co widać na wykresie
 
 ![Wykres fitness history dla best](results/hypersphere_20260414_225852_305808/fitness_history.svg)
 
+<div style="page-break-before: always;"></div>
+
 #### Wykres 3
 Wykres dla selekcji `roulette`
 
@@ -94,21 +99,53 @@ Kluczowa wartość configu względem pozostałych
 - selection_method = roulette
 
 Co widać na wykresie
-- Rownież schodkowy przebig, ale dłuższy
+- Również schodkowy przebieg, ale dłuższy
 - Dojście bliskie rozwiązania dopiero koło 80 epoki
 
 ![Wykres fitness history dla roulette](results/hypersphere_20260414_225900_079200/fitness_history.svg)
 
-## 5. Porównanie wyników dla różnych konfiguracji algorytmu
-Implementacja udostępnia parametry, które bezpośrednio wpływają na jakość i szybkość zbieżności
-- Metoda selekcji: tournament, best, roulette
-- Metoda krzyżowania (oraz jej prawdopodobieństwo): single_point, two_point, uniform, granular 
-- Metoda mutacji (oraz jej prawdopodobieństwo): single_point, edge, two_point
-- Prawdopodobieństwo inwersji
-- Rozmiar populacji
-- Liczba epok
-- Rozmiar elity
+<div style="page-break-before: always;"></div>
 
+#### Wykres 4
+Wykres dla zwiększonej populacji `50 -> 500`
+
+Kluczowa zmiana względem bazowego configu
+- population_size: 50 -> 500
+
+Co widać na wykresie
+- Bardzo szybki spadek wartości fitness i dojście do bardzo małych wartości
+- Praktyczna stabilizacja wyniku już około 10 epoki
+
+![Wykres fitness history dla population_size 500](results/hypersphere_20260419_192636_population/fitness_history.svg)
+
+<div style="page-break-before: always;"></div>
+
+#### Wykres 5
+Wykres dla większego turnieju `3 -> 8`
+
+Kluczowa zmiana względem bazowego configu
+- tournament_size: 3 -> 8
+
+Co widać na wykresie
+- Wykres przypominający prostokąt, nagły spadek na samym początku, potem lekkie poprawki w kolejnych epokach
+
+![Wykres fitness history dla tournament_size 8](results/hypersphere_20260419_192716_tournament_size/fitness_history.svg)
+
+<div style="page-break-before: always;"></div>
+
+#### Wykres 6
+Wykres dla `granular crossover`
+
+Kluczowa zmiana względem bazowego configu
+- crossover_method: single_point -> granular
+- grain_size: 5
+
+Co widać na wykresie
+- Bardzo długie fazy stagnacji przeplatane skokowymi poprawami
+
+![Wykres fitness history dla granular crossover](results/hypersphere_20260419_192745_granular/fitness_history.svg)
+
+## 5. Porównanie wyników dla różnych konfiguracji algorytmu
 Kierunek porównania konfiguracji
 - Większa populacja zwykle poprawia eksplorację kosztem czasu obliczeń
 - Większa liczba epok zwykle poprawia końcowy wynik kosztem czasu
@@ -120,25 +157,35 @@ Zestawienie końcowych wyników
 
 | Przebieg | selection_method | best_fitness | elapsed_seconds |
 | --- | --- | ---: | ---: |
-| Tournament | tournament | 2.5991082520405703e-05 | 0.1211451 |
-| Best | best | 4.897643319657252e-06 | 0.1033877 |
-| Roulette | roulette | 4.630370506111484e-06 | 0.1125114 |
-
-Wniosek z samej wartości końcowej
-- Najlepszy wynik końcowy uzyskał `roulette`
-- Drugi wynik uzyskał najszybszy `best`
-- Najsłabszy wynik końcowy uzyskał `tournament`, który był również najwolniejszy
+| Tournament | tournament | 2.60e-05 | 0.12 |
+| Best | best | 4.90e-06 | 0.10 |
+| Roulette | roulette | 4.63e-06 | 0.11 |
 
 Wnioski z porównania
 - Sama zmiana metody selekcji istotnie zmieniła dynamikę zbieżności
 - Selekcja `best` i roulette dały wyraźnie lepsze wartości końcowe niż tournament
-- Tournament miał najszybszy progress, jednak potem miał problem nadgonić
-- `roullete` z najlepszym wynikiem zbiegało najwolniej, mimo to osiągnęło najlepszy wynik końcowy (ale nie dużo lepszy niż `best`)
+- Tournament miał najszybszy progress na początku, jednak potem miał problem nadgonić
+- `roulette` z najlepszym wynikiem zbiegało najwolniej, mimo to osiągnęło najlepszy wynik końcowy (ale niewiele lepszy niż `best`)
+
+### Dodatkowe porównanie: population, tournament_size i granular
+
+| Przebieg | Kluczowa zmiana | best_fitness | elapsed_seconds |
+| --- | --- | ---: | ---: |
+| Population 500 | population_size 50 -> 500 | 2.66e-13 | 1.56 |
+| Tournament 8 | tournament_size 3 -> 8 | 3.21e-06 | 0.15 |
+| Granular | crossover_method single_point -> granular (grain_size 5) | 3.80e-07 | 0.16 |
+
+Wnioski z dodatkowych 3 konfiguracji
+- Zwiększenie populacji z 50 do 500 dało najszybszą i najbardziej stabilną poprawę jakości (gwałtowny spadek oraz szybka stabilizacja), a końcowo najlepszy wynik
+- Dla tournament_size = 8 widać mocny spadek na początku, a potem głównie drobne poprawki; końcowy wynik był słabszy niż w konfiguracji granular i dużo słabszy niż dla population 500
+- Crossover granular (grain_size = 5) miał długie fazy stagnacji przeplatane skokami poprawy; końcowo był lepszy od tournament_size = 8, ale gorszy od population 500
+- W tej serii największy wpływ na jakość końcową miał rozmiar populacji, natomiast zmiana operatora krzyżowania i wielkości turnieju głównie zmieniała dynamikę zbieżności
 
 ## 6. Podsumowanie i analiza błędów
 Podsumowanie
-- Aplikacją GUI do optymalizacji funkcji Hypersphere algorytmem genetycznym
-- Formularz do konfiguracji funkcji, zapis do plików, oraz generowanie wykresu.
+- Aplikacja GUI do optymalizacji funkcji Hypersphere algorytmem genetycznym
+- Formularz do konfiguracji funkcji, zapis do plików, oraz generowanie wykresu
+- Najlepsza dokładność wyniku ze wszystkich zebranych próbek uzyskana dla przebiegu `Population 500` , gdzie best_fitness = `2.66e-13`, za to kosztem największego czasu `1.5`s
 
 Analiza błędów i ryzyk
 - Jakość wyniku zależy od doboru parametrów i losowości procesu ewolucyjnego
