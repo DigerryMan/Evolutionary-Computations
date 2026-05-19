@@ -51,3 +51,17 @@ uv run .\src\run_pygad_experiments.py
 The script saves a timestamped `results/pygad_suite_*` directory. Each run
 contains `summary.json`, `history.csv`, and `objective_stats.svg`. The suite
 directory also contains `suite_summary.csv` and `suite_summary.md`.
+
+## Run MealPy experiments
+
+Project 4 adds a MealPy-based experiment runner for the same `Hypersphere`
+benchmark. It runs PSO sweeps across inertia weight, c1/c2 coefficients, and
+population sizes.
+
+```bash
+uv run .\src\run_mealpy_experiments.py
+```
+
+The script saves a timestamped `results/mealpy_suite_*` directory. Each run
+contains `summary.json`, `history.csv`, and `objective_history.svg`. The suite
+directory also contains `suite_summary.csv` and `suite_summary.md`.
