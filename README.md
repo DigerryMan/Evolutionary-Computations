@@ -35,3 +35,19 @@ startup and refreshes it after each new run.
 uv run ruff format
 uv run ruff check
 ```
+
+## Run PyGAD experiments
+
+Project 3 adds a PyGAD-based experiment runner for the same `Hypersphere`
+benchmark. It tests binary and real-valued representations across tournament,
+roulette-wheel, and random selection; single-point, two-point, and uniform
+crossover; random and swap mutation. It also includes extra runs for a custom
+single-point crossover and Gaussian mutation.
+
+```bash
+uv run .\src\run_pygad_experiments.py
+```
+
+The script saves a timestamped `results/pygad_suite_*` directory. Each run
+contains `summary.json`, `history.csv`, and `objective_stats.svg`. The suite
+directory also contains `suite_summary.csv` and `suite_summary.md`.

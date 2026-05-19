@@ -9,5 +9,7 @@ dependencies = [
     "PyQt6>=6.5.0",
     "PyQt6-sip>=13.6.0",
     "benchmark-functions>=1.1.4",
+    "numpy>=2.0.0",
+    "pygad>=3.3.1",
     "scipy>=1.17.1",
 ]
